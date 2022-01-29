@@ -751,8 +751,8 @@ impl GuiVertices {
             self.device.destroy_buffer(self.vertex_buffer, None);
             self.device.destroy_buffer(self.index_buffer, None);
         }
-        allocator.free_memory(&self.vertex_alloc).unwrap();
-        allocator.free_memory(&self.index_alloc).unwrap();
+        allocator.free_memory(&self.vertex_alloc);
+        allocator.free_memory(&self.index_alloc);
 
         self.vertex_buffer = vk::Buffer::null();
         self.vertex_alloc = vk_mem::Allocation::null();

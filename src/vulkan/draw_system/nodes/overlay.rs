@@ -55,7 +55,7 @@ impl OverlayPipelines {
         self.pipeline_rgb.destroy();
         self.pipeline_value.destroy();
         for overlay in self.overlays.values() {
-            allocator.destroy_buffer(overlay.buffer, &overlay.alloc)?;
+            allocator.destroy_buffer(overlay.buffer, &overlay.alloc);
         }
         Ok(())
     }

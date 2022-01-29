@@ -46,7 +46,7 @@ impl NodeVertices {
     pub fn destroy(&mut self, app: &GfaestusVk) -> Result<()> {
         if self.has_vertices() {
             app.allocator
-                .destroy_buffer(self.vertex_buffer, &self.allocation)?;
+                .destroy_buffer(self.vertex_buffer, &self.allocation);
 
             self.vertex_buffer = vk::Buffer::null();
             self.allocation = vk_mem::Allocation::null();
@@ -235,7 +235,7 @@ impl NodeVertices {
             }
         }
 
-        app.allocator.destroy_buffer(staging_buf, &staging_alloc)?;
+        app.allocator.destroy_buffer(staging_buf, &staging_alloc);
 
         target.shrink_to_fit();
 

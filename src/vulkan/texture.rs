@@ -148,7 +148,7 @@ impl Texture {
             height,
         )?;
 
-        app.allocator.destroy_buffer(staging_buf, &staging_alloc)?;
+        app.allocator.destroy_buffer(staging_buf, &staging_alloc);
 
         Ok(())
     }

@@ -1158,7 +1158,7 @@ impl GfaestusVk {
             size,
         );
 
-        self.allocator.destroy_buffer(staging_buf, &staging_alloc)?;
+        self.allocator.destroy_buffer(staging_buf, &staging_alloc);
 
         Ok((buffer, alloc, alloc_info))
     }

@@ -789,7 +789,7 @@ impl EdgesUBOBuffer {
 
     pub fn destroy(&self, app: &GfaestusVk) -> Result<()> {
         app.allocator
-            .destroy_buffer(self.buffer, &self.allocation)?;
+            .destroy_buffer(self.buffer, &self.allocation);
         Ok(())
     }
 }

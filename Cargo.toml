@@ -12,7 +12,7 @@ readme = "README.md"
 [dependencies]
 ash = "0.32"
 ash-window = "0.6"
-vk-mem = "0.2.2"
+vk-mem = {version = "0.2.2", git = "https://github.com/Chris--B/vk-mem-rs"}
 
 winit = "0.25"
 # winit = { version = "0.25", default-features = false, features = ["x11"] }
