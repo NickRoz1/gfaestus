@@ -1,14 +1,17 @@
 use handlegraph::{
-    handle::{Edge, Handle},
+    handle::{Edge, Handle, NodeId},
     mutablehandlegraph::*,
     pathhandlegraph::*,
 };
 
-use gfa::mmap::MmapGFA;
+use gfa_modified::mmap::MmapGFA;
 
 use handlegraph::packedgraph::PackedGraph;
 
-use gfa::gfa::Line;
+use gfa_modified::{
+    optfields::OptField,
+    gfa::Line,
+};
 
 use anyhow::Result;
 
@@ -17,7 +20,7 @@ use rustc_hash::FxHashMap;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
-pub fn packed_graph_from_mmap(mmap_gfa: &mut MmapGFA) -> Result<PackedGraph> {
+pub fn packed_graph_from_mmap(mmap_gfa: &mut MmapGFA) -> Result<(PackedGraph, FxHashMap<NodeId, Vec<OptField>>)> {
     let indices = mmap_gfa.build_index()?;
 
     // let mut graph =
@@ -35,26 +38,33 @@ pub fn packed_graph_from_mmap(mmap_gfa: &mut MmapGFA) -> Result<PackedGraph> {
     let mut min_id = std::usize::MAX;
     let mut max_id = 0;
 
+    
+
     for &offset in indices.segments.iter() {
         let _line = mmap_gfa.read_line_at(offset.0)?;
         let name = mmap_gfa.current_line_name().unwrap();
         let name_str = std::str::from_utf8(name).unwrap();
         let id = name_str.parse::<usize>().unwrap();
-
+        
         min_id = id.min(min_id);
         max_id = id.max(max_id);
     }
 
     let id_offset = if min_id == 0 { 1 } else { 0 };
 
+    let mut tags_collector = FxHashMap::<NodeId, Vec<OptField>>::default();
+
     info!("adding nodes");
     for &offset in indices.segments.iter() {
         let _line = mmap_gfa.read_line_at(offset.0)?;
         let segment = mmap_gfa.parse_current_line()?;
 
-        if let gfa::gfa::Line::Segment(segment) = segment {
+        if let gfa_modified::gfa::Line::Segment(segment) = segment {
             let id = (segment.name + id_offset) as u64;
             graph.create_handle(&segment.sequence, id);
+            if tags_collector.insert(NodeId(id), segment.optional).is_some() {
+                panic!("Key already exists.");
+            }
         }
     }
     // eprintln!(
@@ -68,12 +78,11 @@ pub fn packed_graph_from_mmap(mmap_gfa: &mut MmapGFA) -> Result<PackedGraph> {
         let _line = mmap_gfa.read_line_at(offset).ok()?;
         let link = mmap_gfa.parse_current_line().ok()?;
 
-        if let gfa::gfa::Line::Link(link) = link {
+        if let gfa_modified::gfa::Line::Link(link) = link {
             let from_id = (link.from_segment + id_offset) as u64;
             let to_id = (link.to_segment + id_offset) as u64;
-
-            let from = Handle::new(from_id, link.from_orient);
-            let to = Handle::new(to_id, link.to_orient);
+            let from = Handle::new(from_id, convert_orientation(link.from_orient));
+            let to = Handle::new(to_id, convert_orientation(link.to_orient));
 
             Some(Edge(from, to))
         } else {
@@ -116,7 +125,7 @@ pub fn packed_graph_from_mmap(mmap_gfa: &mut MmapGFA) -> Result<PackedGraph> {
                 sender,
                 path.iter().map(|(node, orient)| {
                     let node = node + id_offset;
-                    Handle::new(node, orient)
+                    Handle::new(node, convert_orientation(orient))
                 }),
             );
         }
@@ -152,5 +161,13 @@ pub fn packed_graph_from_mmap(mmap_gfa: &mut MmapGFA) -> Result<PackedGraph> {
     //     graph.total_bytes()
     // );
 
-    Ok(graph)
+    Ok((graph, tags_collector))
+}
+
+// gfa_mmap uses modified version of rs-gfa, when Handlegraph still utilizes old gfa version
+fn convert_orientation(orient_new: gfa_modified::gfa::Orientation) -> gfa::gfa::Orientation {
+    match orient_new {
+        gfa_modified::gfa::Orientation::Forward => gfa::gfa::Orientation::Forward,
+        gfa_modified::gfa::Orientation::Backward => gfa::gfa::Orientation::Backward,
+    }
 }

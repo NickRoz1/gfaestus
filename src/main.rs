@@ -30,6 +30,9 @@ use gfaestus::universe::*;
 use gfaestus::view::View;
 use gfaestus::vulkan::render_pass::Framebuffers;
 
+use gfa_modified::optfields::OptField;
+use std::convert::TryFrom;
+
 use gfaestus::gui::{widgets::*, windows::*, *};
 
 use gfaestus::vulkan::debug;
@@ -571,6 +574,8 @@ fn node_color(id) {
 
                         let mut nodes = selected.iter().copied().collect::<Vec<_>>();
                         nodes.sort();
+                        
+                        extract_regions_and_calc_depth(&graph_query, &nodes);
 
                         gui.app_view_state()
                             .node_list()
@@ -1404,4 +1409,51 @@ where
         let color = rgb::RGBA::new(0.8, 0.1, 0.1, 1.0);
         gfaestus::gui::text::draw_rect_world(ctx, view, rect, Some(color));
     }
+}
+
+fn extract_regions_and_calc_depth(graph_query: &GraphQuery, nodes: &Vec<NodeId>) -> std::thread::JoinHandle<()> {
+    let mut regions = Vec::<(String, i32, i32)>::new();
+    for node_id in nodes {
+        let tags = graph_query.get_tags(node_id).expect("Node was selected, but there is no node ID key in tags hashmap.");
+        // Check if any tag satisfies RGFA definition. It is assumed that if one is found, rest from spec will be there.
+        if tags.iter().any(|tag| &tag.tag == &[b'S', b'N']){
+            let handle = Handle::pack(*node_id, false);
+            let len = graph_query.graph.sequence(handle).count();
+            regions.push(construct_region(tags, len));
+        }
+    }
+    std::thread::spawn(|| {
+        for region in regions {
+            eprintln!("Printing region {:?}", region);
+        }
+    })
+}
+
+fn construct_region(tags: &Vec<OptField>, seq_len: usize) -> (String, i32, i32){
+    let mut region = <(String, i32, i32)>::default() ;
+    let mut found_tags = 0;
+    for tag in tags {
+        match tag.tag {
+            // Name tag
+            [b'S', b'N'] => { 
+                region.0 = std::str::from_utf8(tag.get_string().unwrap()).unwrap().to_owned();
+                found_tags += 1;
+            },
+            // Offset tag
+            [b'S', b'O'] => {
+                region.1 = i32::try_from(tag.get_int().unwrap()).unwrap();
+                found_tags += 1;
+            },
+            _ => (),
+        };
+        if found_tags == 2 {
+            break;
+        }
+    }
+    // Since read is mapped, pos won't be negative. Conversion should be safe.
+    assert!(region.1 >= 0);
+    let offset = region.1 as usize;
+    let end = offset + seq_len;
+    region.2 = i32::try_from(end).unwrap();
+    region
 }

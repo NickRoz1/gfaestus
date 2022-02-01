@@ -13,9 +13,15 @@ use handlegraph::{
     path_position::PathPositionMap,
 };
 
+use gfa_modified::{
+    optfields::OptField,
+};
+
+use rustc_hash::{FxHashMap};
+
 use crossbeam::channel;
 
-use std::sync::Arc;
+use std::{sync::Arc, ops::RangeInclusive};
 
 use anyhow::Result;
 
@@ -55,15 +61,16 @@ impl GraphQueryWorker {
 pub struct GraphQuery {
     pub graph: Arc<PackedGraph>,
     pub path_positions: Arc<PathPositionMap>,
+    pub tag_hash_map: Arc<FxHashMap<NodeId, Vec<OptField>>>,
     query_thread: QueryThread,
 }
 
 impl GraphQuery {
     pub fn load_gfa(gfa_path: &str) -> Result<Self> {
-        let mut mmap = gfa::mmap::MmapGFA::new(gfa_path)?;
-        let graph = crate::gfa::load::packed_graph_from_mmap(&mut mmap)?;
+        let mut mmap = gfa_modified::mmap::MmapGFA::new(gfa_path)?;
+        let (graph, tags) = crate::gfa::load::packed_graph_from_mmap(&mut mmap)?;
         let path_positions = PathPositionMap::index_paths(&graph);
-        Ok(Self::new(graph, path_positions))
+        Ok(Self::new(graph, path_positions, tags))
     }
 
     pub fn node_count(&self) -> usize {
@@ -74,15 +81,21 @@ impl GraphQuery {
         self.graph.edge_count()
     }
 
-    pub fn new(graph: PackedGraph, path_positions: PathPositionMap) -> Self {
+    pub fn new(graph: PackedGraph, path_positions: PathPositionMap, tag_hash_map: FxHashMap<NodeId, Vec<OptField>>) -> Self {
         let graph = Arc::new(graph);
         let path_positions = Arc::new(path_positions);
         let query_thread = QueryThread::new(graph.clone());
+        let tag_hash_map = Arc::new(tag_hash_map);
         Self {
             graph,
             path_positions,
             query_thread,
+            tag_hash_map,
         }
+    }
+
+    pub fn get_tags(&self, node_id: &NodeId) -> Option<&Vec<OptField>> {
+        self.tag_hash_map.get(&node_id)
     }
 
     pub fn query_request_blocking(
